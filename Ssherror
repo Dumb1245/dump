@@ -1,0 +1,5 @@
+This error message indicates that there was a problem with the SSL/TLS handshake between the client and server. Specifically, it seems that the server abruptly closed the connection during the handshake, resulting in a "Connection reset" error.
+
+The error trace shows that the exception was thrown by the client-side SSL code when it received a "Connection reset" error while attempting to read from the server. The exception was ultimately caused by a java.net.SocketException, which is thrown when a low-level socket error occurs.
+
+Possible causes of this error include network connectivity issues, server-side configuration problems, or client-side firewall issues. It could also be caused by a misconfigured SSL/TLS certificate, or an expired or revoked certificate.
