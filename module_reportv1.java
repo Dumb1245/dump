@@ -2,20 +2,26 @@ import com.itextpdf.text.*;
 import com.itextpdf.text.pdf.*;
 
 import java.io.BufferedReader;
-import java.io.FileReader;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 
 public class TextToPDF {
     public static void main(String[] args) {
         String inputFile = "input.txt";  // input text file
         String outputFile = "output.pdf";  // output PDF file
+        String imagePath = "logo.jpg";  // replace with the path to your image
 
         Document document = new Document();
         try {
             PdfWriter.getInstance(document, new FileOutputStream(outputFile));
             document.open();
             
+            // Add image
+            Image img = Image.getInstance(imagePath);
+            img.setAlignment(Element.ALIGN_CENTER);
+            document.add(img);
+
             // Add title
             Paragraph title = new Paragraph("Module Report", 
                                 new Font(Font.FontFamily.TIMES_ROMAN, 18, Font.BOLD));
