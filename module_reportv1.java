@@ -17,14 +17,18 @@ public class TextToPDF {
             document.open();
             
             PdfPTable table = new PdfPTable(6);  // number of columns in the table
+            table.setWidthPercentage(100);  // this makes the table width 100% of the page
             
+            // Define a smaller font
+            Font smallerFont = new Font(Font.FontFamily.TIMES_ROMAN, 10);
+
             // Add table headers
-            table.addCell("Header 1");
-            table.addCell("Header 2");
-            table.addCell("Header 3");
-            table.addCell("Header 4");
-            table.addCell("Header 5");
-            table.addCell("Header 6");
+            table.addCell(new PdfPCell(new Phrase("Header 1", smallerFont)));
+            table.addCell(new PdfPCell(new Phrase("Header 2", smallerFont)));
+            table.addCell(new PdfPCell(new Phrase("Header 3", smallerFont)));
+            table.addCell(new PdfPCell(new Phrase("Header 4", smallerFont)));
+            table.addCell(new PdfPCell(new Phrase("Header 5", smallerFont)));
+            table.addCell(new PdfPCell(new Phrase("Header 6", smallerFont)));
 
             // Open the text file
             BufferedReader br = new BufferedReader(new FileReader(inputFile));
@@ -32,12 +36,26 @@ public class TextToPDF {
             
             // Loop through each line in the file
             while ((line = br.readLine()) != null) {
+                // Skip lines that start with "DM11_Module_Report"
+                if (line.startsWith("DM11_Module_Report")) {
+                    continue;
+                }
+
                 // Split the line by "|"
                 String[] parts = line.split("\\|");
+
+                // Check and rename third column if necessary
+                if (parts.length > 2) {
+                    if (parts[2].equals("1173")) {
+                        parts[2] = "custom";
+                    } else if (parts[2].equals("1174")) {
+                        parts[2] = "query";
+                    }
+                }
                 
-                // Add a cell for each part
+                // Add a cell for each part with the smaller font
                 for (String part : parts) {
-                    table.addCell(part);
+                    table.addCell(new PdfPCell(new Phrase(part, smallerFont)));
                 }
             }
             br.close();
