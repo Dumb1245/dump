@@ -16,6 +16,13 @@ public class TextToPDF {
             PdfWriter.getInstance(document, new FileOutputStream(outputFile));
             document.open();
             
+            // Add title
+            Paragraph title = new Paragraph("Module Report", 
+                                new Font(Font.FontFamily.TIMES_ROMAN, 18, Font.BOLD));
+            title.setAlignment(Element.ALIGN_CENTER);
+            document.add(title);
+            document.add(new Paragraph("\n"));  // add a line break after the title
+            
             PdfPTable table = new PdfPTable(6);  // number of columns in the table
             table.setWidthPercentage(100);  // this makes the table width 100% of the page
             
