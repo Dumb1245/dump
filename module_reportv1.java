@@ -14,8 +14,16 @@ public class TextToPDF {
 
         Document document = new Document();
         try {
-            PdfWriter.getInstance(document, new FileOutputStream(outputFile));
+            PdfWriter writer = PdfWriter.getInstance(document, new FileOutputStream(outputFile));
             document.open();
+            
+            // Add "User Guide" link at top right
+            Anchor anchor = new Anchor("User Guide", FontFactory.getFont(FontFactory.TIMES, 12));
+            anchor.setReference("http://example.com/user-guide");  // replace with the actual URL
+            Paragraph anchorParagraph = new Paragraph(anchor);
+            ColumnText.showTextAligned(writer.getDirectContent(), Element.ALIGN_RIGHT, 
+                                       new Phrase(anchorParagraph), 
+                                       document.right(), document.top(), 0);
             
             // Add image
             Image img = Image.getInstance(imagePath);
