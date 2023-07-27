@@ -19,6 +19,7 @@ public class TextToPDF {
             
             // Add image
             Image img = Image.getInstance(imagePath);
+            img.scaleAbsolute(200, 100);  // scale image to 200x100
             img.setAlignment(Element.ALIGN_CENTER);
             document.add(img);
 
@@ -27,10 +28,18 @@ public class TextToPDF {
                                 new Font(Font.FontFamily.TIMES_ROMAN, 18, Font.BOLD));
             title.setAlignment(Element.ALIGN_CENTER);
             document.add(title);
+
+            // Add one-liner below title
+            Paragraph oneLiner = new Paragraph("This is a module report for SIT env", 
+                                new Font(Font.FontFamily.TIMES_ROMAN, 10));
+            oneLiner.setAlignment(Element.ALIGN_CENTER);
+            document.add(oneLiner);
+
             document.add(new Paragraph("\n"));  // add a line break after the title
             
             PdfPTable table = new PdfPTable(6);  // number of columns in the table
             table.setWidthPercentage(100);  // this makes the table width 100% of the page
+            table.setWidths(new float[] {1f, 0.5f, 1f, 1f, 1f, 1f});  // set relative widths of columns
             
             // Define a smaller font
             Font smallerFont = new Font(Font.FontFamily.TIMES_ROMAN, 10);
