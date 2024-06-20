@@ -1,24 +1,27 @@
 #!/bin/bash
 
-# Directory where the files are located
-DIR="/path/to/your/files"
+# Define the directory containing the files
+DM_IN_DIR="/path/to/your/directory"
 
-# Loop through each BDL_*ACKYINFO_UDP*.xml file
-for bdl_file in "${DIR}"/BDL_*ACKYINFO_UDP*.xml; do
-  # Extract the unique identifier from the BDL file name
-  unique_id=$(basename "$bdl_file" | sed 's/^BDL_//;s/_ACKYINFO_UDP.*\.xml$//')
-  
-  # Find the corresponding BFA_DM11_* file
-  bfa_file=$(find "$DIR" -type f -name "BFA_DM11_${unique_id}*.xml")
-  
-  if [[ -f "$bfa_file" ]]; then
-    # Append the content of the BDL file to the BFA file
-    cat "$bdl_file" >> "$bfa_file"
+# Iterate over files matching the pattern in the specified directory
+for file in "$DM_IN_DIR"/BDL_*ACKYINFO_UDP*.xml; do
+  # Check if the file exists to avoid errors if no files match
+  if [[ -e "$file" ]]; then
+    # Extract the base filename from the full path
+    base_filename=$(basename "$file")
     
-    # Run the shell command using the BFA file
-    # Replace `your_command_here` with the actual command you want to run
-    your_command_here "$bfa_file"
-  else
-    echo "No corresponding BFA_DM11_* file found for $bdl_file"
+    # Construct the new filename by appending the prefix
+    new_filename="BFA_DM11_${base_filename}"
+
+    # Define the full path to the new file
+    new_filepath="$DM_IN_DIR/$new_filename"
+
+    # Execute your shell command using the new filename
+    # For example, let's just echo the new filename
+    # Replace 'echo' with the actual command you want to run
+    echo "Executing command on $new_filepath"
+    
+    # Uncomment and modify the line below to run the actual command
+    # your_command_here "$new_filepath"
   fi
 done
