@@ -1,0 +1,106 @@
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.zip.*;
+
+public class UpdateZipFile {
+
+    public static void main(String[] args) {
+        String zipFilePath = "dm/inbound/DM11_BIW.zip";
+        String deltaFilePath = "dm/delta.txt";
+        String tempDir = "dm/temp/";
+
+        try {
+            // Step 1: Unzip the files to a temporary directory
+            unzip(zipFilePath, tempDir);
+
+            // Step 2: Read the delta.txt file content
+            String deltaContent = new String(Files.readAllBytes(Paths.get(deltaFilePath)));
+
+            // Step 3: Find and update payment_offer_tmlplt*.txt files in the temp directory
+            File dir = new File(tempDir);
+            for (File file : dir.listFiles()) {
+                if (file.getName().startsWith("payment_offer_tmlplt") && file.getName().endsWith(".txt")) {
+                    // Update the file with delta content
+                    Files.write(file.toPath(), deltaContent.getBytes(), StandardOpenOption.APPEND);
+                    break;
+                }
+            }
+
+            // Step 4: Re-zip the files from the temp directory back to the original zip file
+            zip(tempDir, zipFilePath);
+
+            // Step 5: Clean up the temporary directory
+            deleteDirectory(new File(tempDir));
+
+            System.out.println("Update completed successfully!");
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Method to unzip the file
+    public static void unzip(String zipFilePath, String destDir) throws IOException {
+        File dir = new File(destDir);
+        if (!dir.exists()) dir.mkdirs();
+        FileInputStream fis = new FileInputStream(zipFilePath);
+        ZipInputStream zis = new ZipInputStream(fis);
+        ZipEntry entry = zis.getNextEntry();
+        while (entry != null) {
+            File newFile = new File(destDir + File.separator + entry.getName());
+            if (entry.isDirectory()) {
+                newFile.mkdirs();
+            } else {
+                new File(newFile.getParent()).mkdirs();
+                FileOutputStream fos = new FileOutputStream(newFile);
+                byte[] buffer = new byte[1024];
+                int len;
+                while ((len = zis.read(buffer)) > 0) {
+                    fos.write(buffer, 0, len);
+                }
+                fos.close();
+            }
+            entry = zis.getNextEntry();
+        }
+        zis.closeEntry();
+        zis.close();
+        fis.close();
+    }
+
+    // Method to zip the directory
+    public static void zip(String srcDir, String zipFilePath) throws IOException {
+        FileOutputStream fos = new FileOutputStream(zipFilePath);
+        ZipOutputStream zos = new ZipOutputStream(fos);
+        File dir = new File(srcDir);
+        for (File file : dir.listFiles()) {
+            addToZip(file, zos);
+        }
+        zos.close();
+        fos.close();
+    }
+
+    // Helper method to add files to zip
+    private static void addToZip(File file, ZipOutputStream zos) throws IOException {
+        FileInputStream fis = new FileInputStream(file);
+        ZipEntry zipEntry = new ZipEntry(file.getName());
+        zos.putNextEntry(zipEntry);
+        byte[] buffer = new byte[1024];
+        int len;
+        while ((len = fis.read(buffer)) > 0) {
+            zos.write(buffer, 0, len);
+        }
+        zos.closeEntry();
+        fis.close();
+    }
+
+    // Method to delete a directory recursively
+    public static void deleteDirectory(File file) throws IOException {
+        if (file.isDirectory()) {
+            for (File subFile : file.listFiles()) {
+                deleteDirectory(subFile);
+            }
+        }
+        file.delete();
+    }
+}
