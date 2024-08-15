@@ -1,0 +1,25 @@
+--
+Day of deployment 
+- we sent day 0 
+- Snapshot capture the pymnt_pln_offr_tmplt records which have been sent till date
+
+Next day
+- BIW daily get extracted
+- PAYMNT_Utility works
+- Compares it with pymnt_pln_offr_tmplt complete extract
+- and then update the delta records in the daily file in any
+
+
+
+
+
+Monthly 
+
+-- No Day 0
+-- we cant capture snapshot the records which we have sent till date
+
+Monthly schedule
+- BIW monthly core get extracted
+- PAYMNT_monthly_Utility works
+- Compares it with pymnt_pln_offr_tmplt monthly complete extract
+- and then update the delta records in the monthly core file in any
