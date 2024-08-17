@@ -1,0 +1,283 @@
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
+
+public class DM11_BFA_PAYMNT_Utility {
+
+    private static final String inboundDir = System.getenv("DM_IN_DIR");
+    private static final String TEMP_DIR = Paths.get(inboundDir, "temp").toString();
+    private static final String DELIMITER = "\\|~\\|"; // Changed delimiter
+
+    public static void main(String[] args) throws IOException {
+        // Define directories and file patterns
+        DM11_BFA_Common.subInit();
+        String zipFilePattern = "DM11_BFA_PYMNT_PLN_";
+        String txtFilePattern = "pymnt_plan_offr_tmplt_";
+        String snapshotFile = "C:/Users/G01421771/Desktop/DM 11/DM11 batch/snapshot.txt";
+        String deltaFile = "C:/Users/G01421771/Desktop/DM 11/DM11 batch/delta.txt";
+        String biwZipFilePattern = "DM11_BFA_BIW_DAILY_";
+
+        DM11_BFA_Common.log.info("Starting DM11_BFA_PAYMNT_Utility");
+        // Find the latest zip file
+        File latestZipFile = findLatestFile(inboundDir, zipFilePattern, ".zip");
+        if (latestZipFile == null) {
+            DM11_BFA_Common.log.info("No zip file found");
+            return;
+        }
+
+        // Extract the latest txt file from the zip file
+        String latestTxtFileContent = extractLatestTxtFile(latestZipFile, txtFilePattern, ".txt");
+
+        // Read the snapshot file
+        List<String> snapshotLines = readLines(snapshotFile);
+        DM11_BFA_Common.log.info("Read snapshot file lines");
+
+        // Split the latest txt file content into lines
+        List<String> latestTxtLines = splitLines(latestTxtFileContent);
+        DM11_BFA_Common.log.info("Split latest txt file content into lines");
+
+        List<String> differences = findDifferences(snapshotLines, latestTxtLines);
+        DM11_BFA_Common.log.info("Found differences between snapshot and latest txt files");
+
+        // Add system's date to columns 26, 27, 28, and 29
+        List<String> updatedDifferences = updateDifferences(differences);
+        DM11_BFA_Common.log.info("Updated differences with system's date");
+
+        // Write the updated differences to the delta file
+        writeLines(deltaFile, updatedDifferences);
+        DM11_BFA_Common.log.info("Wrote updated differences to delta file");
+
+        DM11_BFA_Common.log.info("Read delta file lines");
+
+        // Add the delta lines to the txt file inside the other zip file
+        addDeltaLinesToTxtFileInsideZip(biwZipFilePattern, deltaFile, TEMP_DIR);
+
+        // Update the snapshot file
+        updateSnapshot(snapshotFile);
+    }
+
+    private static File findLatestFile(String dir, String fileNameStart, String fileExtension) {
+        DM11_BFA_Common.log.info("Finding latest file in directory");
+        File directory = new File(dir);
+        File[] files = directory.listFiles((d, name) -> name.startsWith(fileNameStart) && name.endsWith(fileExtension));
+        File latestFile = null;
+        long latestTime = 0;
+        for (File file : files) {
+            long time = file.lastModified();
+            if (time > latestTime) {
+                latestFile = file;
+                latestTime = time;
+            }
+        }
+        DM11_BFA_Common.log.info("Found latest file: " + latestFile);
+        return latestFile;
+    }
+
+    private static String extractLatestTxtFile(File zipFile, String fileNameStart, String fileNameEnd) throws IOException {
+        DM11_BFA_Common.log.info("Extracting latest txt file from zip file");
+        ZipFile zip = new ZipFile(zipFile);
+        ZipEntry latestEntry = null;
+        long latestTime = 0;
+        Enumeration<? extends ZipEntry> entries = zip.entries();
+        while (entries.hasMoreElements()) {
+            ZipEntry entry = entries.nextElement();
+            if (entry.getName().startsWith(fileNameStart) && entry.getName().endsWith(fileNameEnd)) {
+                long time = entry.getTime();
+                if (time > latestTime) {
+                    latestEntry = entry;
+                    latestTime = time;
+                }
+            }
+        }
+        if (latestEntry == null) {
+            DM11_BFA_Common.log.info("No txt file found in zip");
+            return null;
+        }
+        DM11_BFA_Common.log.info("Found latest payment plan offer template txt file: " + latestEntry.getName());
+        StringBuilder content = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(zip.getInputStream(latestEntry)))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                content.append(line).append("\n");
+            }
+        }
+        DM11_BFA_Common.log.info("Extracted latest txt file content");
+        return content.toString();
+    }
+
+    private static List<String> readLines(String file) throws IOException {
+        DM11_BFA_Common.log.info("Reading lines from file: " + file);
+        List<String> lines = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                lines.add(line);
+            }
+        }
+        DM11_BFA_Common.log.info("Read " + lines.size() + " lines from file");
+        return lines;
+    }
+
+    private static List<String> splitLines(String content) {
+        DM11_BFA_Common.log.info("Splitting lines from content");
+        List<String> lines = new ArrayList<>();
+        String[] splitContent = content.split("\n");
+        Collections.addAll(lines, splitContent);
+        DM11_BFA_Common.log.info("Split " + lines.size() + " lines from content");
+        return lines;
+    }
+
+    private static List<String> findDifferences(List<String> snapshotLines, List<String> latestTxtLines) {
+        DM11_BFA_Common.log.info("Finding differences between snapshot and latest txt files");
+        List<String> differences = new ArrayList<>();
+        Map<String, String> snapshotMap = new HashMap<>();
+        for (String line : snapshotLines) {
+            String[] columns = line.split(DELIMITER);
+            if (columns.length > 1) { // added check
+                snapshotMap.put(columns[1], line); // assuming offr_tmplt_id is the second column
+            }
+        }
+
+        for (String line : latestTxtLines) {
+            String[] columns = line.split(DELIMITER);
+            if (columns.length > 1) { // added check
+                String offr_tmplt_id = columns[1];
+                if (!snapshotMap.containsKey(offr_tmplt_id) || !snapshotMap.get(offr_tmplt_id).equals(line)) {
+                    differences.add(line);
+                }
+            }
+        }
+        DM11_BFA_Common.log.info("Found " + differences.size() + " differences");
+        return differences;
+    }
+
+    private static void writeLines(String file, List<String> lines) throws IOException {
+        DM11_BFA_Common.log.info("Writing lines to file: " + file);
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
+            // Write the differences
+            for (String line : lines) {
+                writer.write(line + "\r\n"); // add CRLF
+            }
+        }
+        DM11_BFA_Common.log.info("Wrote " + lines.size() + " lines to file");
+    }
+
+    private static List<String> updateDifferences(List<String> differences) {
+        DM11_BFA_Common.log.info("Updating differences with system's date");
+        List<String> updatedDifferences = new ArrayList<>();
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+        String currentDate = dateFormat.format(new Date());
+
+        for (String line : differences) {
+            String[] columns = line.split(DELIMITER);
+            if (columns.length >= 25) {
+                columns[25] = currentDate; // column 26
+                columns[26] = ""; // column 27
+                columns[27] = ""; // column 28
+                columns[28] = ""; // column 29
+            }
+
+            String updatedLine = String.join("|~|", columns); // Updated join delimiter
+            updatedDifferences.add(updatedLine);
+        }
+        DM11_BFA_Common.log.info("Updated " + updatedDifferences.size() + " differences with system's date");
+
+        return updatedDifferences;
+    }
+
+    private static void addDeltaLinesToTxtFileInsideZip(String biwZipFilePattern, String deltaFile, String TEMP_DIR) throws IOException {
+        DM11_BFA_Common.log.info("Adding delta lines to txt file inside zip file");
+        try {
+            // Step 1: Find the latest zip file
+            File latestZipFile = findLatestFile(inboundDir, biwZipFilePattern, ".zip");
+
+            // Step 2: Unzip the files to a temporary directory
+            unzip(latestZipFile.getAbsolutePath(), TEMP_DIR);
+
+            // Step 3: Append delta lines to the specific txt file
+            String txtFileName = Paths.get(TEMP_DIR, "target_text_file.txt").toString(); // replace with actual txt file name
+            List<String> deltaLines = readLines(deltaFile);
+            Files.write(Paths.get(txtFileName), deltaLines, StandardOpenOption.APPEND);
+
+            // Step 4: Zip the files back to the original zip file
+            zip(TEMP_DIR, latestZipFile.getAbsolutePath());
+
+            DM11_BFA_Common.log.info("Added delta lines to txt file inside zip file successfully");
+
+        } catch (IOException e) {
+            DM11_BFA_Common.log.error("Failed to add delta lines to txt file inside zip file", e);
+            throw e;
+        }
+    }
+
+    private static void unzip(String zipFilePath, String destDir) throws IOException {
+        DM11_BFA_Common.log.info("Unzipping file: " + zipFilePath);
+        File dir = new File(destDir);
+        if (!dir.exists()) dir.mkdirs();
+        byte[] buffer = new byte[1024];
+        ZipInputStream zis = new ZipInputStream(new FileInputStream(zipFilePath));
+        ZipEntry zipEntry = zis.getNextEntry();
+        while (zipEntry != null) {
+            File newFile = new File(destDir, zipEntry.getName());
+            if (zipEntry.isDirectory()) {
+                newFile.mkdirs();
+            } else {
+                new File(newFile.getParent()).mkdirs();
+                try (FileOutputStream fos = new FileOutputStream(newFile)) {
+                    int len;
+                    while ((len = zis.read(buffer)) > 0) {
+                        fos.write(buffer, 0, len);
+                    }
+                }
+            }
+            zipEntry = zis.getNextEntry();
+        }
+        zis.closeEntry();
+        zis.close();
+        DM11_BFA_Common.log.info("Unzipped file successfully");
+    }
+
+    private static void zip(String srcDir, String zipFilePath) throws IOException {
+        DM11_BFA_Common.log.info("Zipping directory: " + srcDir);
+        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipFilePath))) {
+            File dir = new File(srcDir);
+            for (File file : dir.listFiles()) {
+                addToZip(file, zos, "");
+            }
+        }
+        DM11_BFA_Common.log.info("Zipped directory successfully");
+    }
+
+    private static void addToZip(File file, ZipOutputStream zos, String parentDir) throws IOException {
+        if (file.isDirectory()) {
+            for (File childFile : file.listFiles()) {
+                addToZip(childFile, zos, parentDir + file.getName() + "/");
+            }
+        } else {
+            try (FileInputStream fis = new FileInputStream(file)) {
+                String zipEntryName = parentDir + file.getName();
+                zos.putNextEntry(new ZipEntry(zipEntryName));
+                byte[] buffer = new byte[1024];
+                int len;
+                while ((len = fis.read(buffer)) > 0) {
+                    zos.write(buffer, 0, len);
+                }
+                zos.closeEntry();
+            }
+        }
+    }
+
+    private static void updateSnapshot(String snapshotFile) throws IOException {
+        DM11_BFA_Common.log.info("Updating snapshot file");
+        List<String> deltaLines = readLines("C:/Users/G01421771/Desktop/DM 11/DM11 batch/delta.txt");
+        writeLines(snapshotFile, deltaLines);
+        DM11_BFA_Common.log.info("Updated snapshot file");
+    }
+}
