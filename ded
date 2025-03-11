@@ -1,0 +1,127 @@
+static int callBPOAPI() throws Exception {
+    // Fetch all jobs
+    DM11_BFA_Common.log.info("Fetching all the jobs");
+    JSONObject response = DM11_BFA_Common.make_call_bpo(resource: "/jobs", token: true, vt: true, config: "GET");
+
+    // Parse the JSON array to extract job IDs for Ackyinfo, Debtsale, and NewModule
+    JSONArray jobsArray = new JSONArray(response.toString()); // Assuming response is a JSONArray or needs conversion
+    int ackyinfoCreateBDLJobId = -1;
+    int ackyinfoLoadBDLJobId = -1;
+    int debtsaleCreateBDLJobId = -1;
+    int debtsaleLoadBDLJobId = -1;
+    int newModuleCreateBDLJobId = -1;
+    int newModuleLoadBDLJobId = -1;
+
+    for (int i = 0; i < jobsArray.length(); i++) {
+        JSONObject job = jobsArray.getJSONObject(i);
+        String name = job.getString("name");
+        int id = job.getInt("id");
+
+        if (name.equals("ACKYINFO - Create BDL")) {
+            ackyinfoCreateBDLJobId = id;
+        } else if (name.equals("ACKYINFO UDP - Load BDL")) {
+            ackyinfoLoadBDLJobId = id;
+        } else if (name.equals("DEBTSALE - Create BDL")) {
+            debtsaleCreateBDLJobId = id;
+        } else if (name.equals("DEBTSALE UDP - Load BDL")) {
+            debtsaleLoadBDLJobId = id;
+        } else if (name.equals("NewModule - Create BDL")) {
+            newModuleCreateBDLJobId = id;
+        } else if (name.equals("NewModule UDP - Load BDL")) {
+            newModuleLoadBDLJobId = id;
+        }
+    }
+
+    // Validate that at least the core job IDs are found (optional strictness)
+    if (ackyinfoCreateBDLJobId == -1 || ackyinfoLoadBDLJobId == -1) {
+        DM11_BFA_Common.log.error("Ackyinfo job IDs not found in response");
+        return -1;
+    }
+    if (debtsaleCreateBDLJobId == -1 || debtsaleLoadBDLJobId == -1) {
+        DM11_BFA_Common.log.error("Debtsale job IDs not found in response");
+        return -1;
+    }
+    if (newModuleCreateBDLJobId == -1 || newModuleLoadBDLJobId == -1) {
+        DM11_BFA_Common.log.warn("NewModule job IDs not found in response, skipping NewModule processing");
+        // Continue with other modules if NewModule is optional
+    }
+
+    // Process Ackyinfo Create BDL Job
+    if (ackyinfoCreateBDLJobId != -1) {
+        DM11_BFA_Common.log.info("Starting the Create BDL job for Ackyinfo with Id: " + ackyinfoCreateBDLJobId);
+        JSONObject startJobAckyinfoCreate = DM11_BFA_Common.make_call_bpo(
+            resource: "/startjob/" + ackyinfoCreateBDLJobId, token: true, vt: true, config: "GET");
+        int jobStatusIdAckyinfoCreate = startJobAckyinfoCreate.getInt(key: "id");
+    }
+
+    // Process Debtsale Create BDL Job
+    if (debtsaleCreateBDLJobId != -1) {
+        DM11_BFA_Common.log.info("Starting the Create BDL job for Debtsale with Id: " + debtsaleCreateBDLJobId);
+        JSONObject startJobDebtsaleCreate = DM11_BFA_Common.make_call_bpo(
+            resource: "/startjob/" + debtsaleCreateBDLJobId, token: true, vt: true, config: "GET");
+        int jobStatusIdDebtsaleCreate = startJobDebtsaleCreate.getInt(key: "id");
+    }
+
+    // Process NewModule Create BDL Job
+    if (newModuleCreateBDLJobId != -1) {
+        DM11_BFA_Common.log.info("Starting the Create BDL job for NewModule with Id: " + newModuleCreateBDLJobId);
+        JSONObject startJobNewModuleCreate = DM11_BFA_Common.make_call_bpo(
+            resource: "/startjob/" + newModuleCreateBDLJobId, token: true, vt: true, config: "GET");
+        int jobStatusIdNewModuleCreate = startJobNewModuleCreate.getInt(key: "id");
+    }
+
+    // Date formatting logic
+    Date curr_date = new Date();
+    SimpleDateFormat dateFormat = new SimpleDateFormat(pattern: "yyyy-MM-dd");
+    Calendar c = Calendar.getInstance();
+    c.setTime(dateFormat.parse(dateFormat.format(curr_date)));
+    c.add(Calendar.DATE, amount: 1);
+    String next_date = dateFormat.format(c.getTime());
+
+    // Log and fetch job runs for Ackyinfo Create BDL
+    if (ackyinfoCreateBDLJobId != -1) {
+        DM11_BFA_Common.log.info("Calling Create BDL job log API for Ackyinfo with Id: " + ackyinfoCreateBDLJobId);
+        JSONObject resJobAckyinfoCreate = DM11_BFA_Common.make_call_bpo(
+            resource: "/jobs/" + ackyinfoCreateBDLJobId + "/runs", token: true, vt: true, config: "GET");
+    }
+
+    // Log and fetch job runs for Debtsale Create BDL
+    if (debtsaleCreateBDLJobId != -1) {
+        DM11_BFA_Common.log.info("Calling Create BDL job log API for Debtsale with Id: " + debtsaleCreateBDLJobId);
+        JSONObject resJobDebtsaleCreate = DM11_BFA_Common.make_call_bpo(
+            resource: "/jobs/" + debtsaleCreateBDLJobId + "/runs", token: true, vt: true, config: "GET");
+    }
+
+    // Log and fetch job runs for NewModule Create BDL
+    if (newModuleCreateBDLJobId != -1) {
+        DM11_BFA_Common.log.info("Calling Create BDL job log API for NewModule with Id: " + newModuleCreateBDLJobId);
+        JSONObject resJobNewModuleCreate = DM11_BFA_Common.make_call_bpo(
+            resource: "/jobs/" + newModuleCreateBDLJobId + "/runs", token: true, vt: true, config: "GET");
+    }
+
+    // Process Ackyinfo Load BDL Job
+    if (ackyinfoLoadBDLJobId != -1) {
+        DM11_BFA_Common.log.info("Starting the Load BDL job for Ackyinfo with Id: " + ackyinfoLoadBDLJobId);
+        JSONObject startJobAckyinfoLoad = DM11_BFA_Common.make_call_bpo(
+            resource: "/startjob/" + ackyinfoLoadBDLJobId, token: true, vt: true, config: "GET");
+        int jobStatusIdAckyinfoLoad = startJobAckyinfoLoad.getInt(key: "id");
+    }
+
+    // Process Debtsale Load BDL Job
+    if (debtsaleLoadBDLJobId != -1) {
+        DM11_BFA_Common.log.info("Starting the Load BDL job for Debtsale with Id: " + debtsaleLoadBDLJobId);
+        JSONObject startJobDebtsaleLoad = DM11_BFA_Common.make_call_bpo(
+            resource: "/startjob/" + debtsaleLoadBDLJobId, token: true, vt: true, config: "GET");
+        int jobStatusIdDebtsaleLoad = startJobDebtsaleLoad.getInt(key: "id");
+    }
+
+    // Process NewModule Load BDL Job
+    if (newModuleLoadBDLJobId != -1) {
+        DM11_BFA_Common.log.info("Starting the Load BDL job for NewModule with Id: " + newModuleLoadBDLJobId);
+        JSONObject startJobNewModuleLoad = DM11_BFA_Common.make_call_bpo(
+            resource: "/startjob/" + newModuleLoadBDLJobId, token: true, vt: true, config: "GET");
+        int jobStatusIdNewModuleLoad = startJobNewModuleLoad.getInt(key: "id");
+    }
+
+    return 0; // Success
+}
