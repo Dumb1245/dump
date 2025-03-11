@@ -1,0 +1,68 @@
+public static JSONObject make_call_bpo(String resource, String module, boolean token, boolean vt, String config, String body) throws Exception {
+    JSONObject responseObj = null;
+    JSONArray responseArr = null;
+    JSONArray searchJobLogRes = null;
+    JSONObject jobStatusRes = null;
+
+    // Simulate or implement the HTTP call here (replace with actual implementation)
+    String responseContent = // Result of the HTTP call to the resource
+
+    // Log the raw response content for debugging
+    DM11_BFA_Common.log.info("Raw response content from " + resource + ": " + responseContent);
+
+    if (responseContent == null || responseContent.trim().isEmpty()) {
+        DM11_BFA_Common.log.error("Empty response content from " + resource);
+        throw new Exception("Empty response from " + resource);
+    }
+
+    if (resource.equals("/login")) {
+        responseObj = new JSONObject(responseContent);
+    } else if (resource.equals("/jobs")) {
+        try {
+            // First, try to parse as a JSONObject to check for a "jobs" key
+            responseObj = new JSONObject(responseContent);
+            responseArr = responseObj.optJSONArray("jobs"); // Get the jobs array if it exists
+            if (responseArr == null) {
+                // If no "jobs" key, try parsing the entire response as a JSONArray
+                responseArr = new JSONArray(responseContent);
+            }
+        } catch (JSONException e) {
+            DM11_BFA_Common.log.error("Failed to parse /jobs response: " + responseContent, e);
+            throw e;
+        }
+
+        // Populate jobIdsObj based on the specified module
+        JSONObject jobIdsObj = new JSONObject();
+        for (int i = 0; i < responseArr.length(); i++) {
+            JSONObject obj = responseArr.getJSONObject(i);
+            String name = obj.getString("name");
+            if (module != null && module.equals("ACKYINFO")) {
+                if (name.equals("ACKYINFO - Create BDL")) {
+                    jobIdsObj.put("createBDLJobId", obj.getInt("id"));
+                } else if (name.equals("ACKYINFO UDP - Load BDL")) {
+                    jobIdsObj.put("loadBDLJobId", obj.getInt("id"));
+                }
+            } else if (module != null && module.equals("DEBTSALE")) {
+                if (name.equals("DEBTSALE - Create BDL")) {
+                    jobIdsObj.put("createBDLJobId", obj.getInt("id"));
+                } else if (name.equals("DEBTSALE UDP - Load BDL")) {
+                    jobIdsObj.put("loadBDLJobId", obj.getInt("id"));
+                }
+            }
+        }
+        return jobIdsObj; // Return jobIdsObj directly for /jobs
+    } else if (resource.endsWith("/runs")) {
+        searchJobLogRes = new JSONArray(responseContent);
+        responseObj = new JSONObject();
+        responseObj.put("runs", searchJobLogRes);
+    } else if (resource.startsWith("/jobstatus/")) {
+        jobStatusRes = new JSONObject(responseContent);
+        responseObj = new JSONObject();
+        responseObj.put("status", jobStatusRes);
+    } else {
+        // Default case for other resources
+        responseObj = new JSONObject(responseContent);
+    }
+
+    return responseObj;
+}
