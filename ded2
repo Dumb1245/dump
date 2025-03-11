@@ -1,0 +1,53 @@
+public class DM11_BFA_BPOProcessing {
+    public static void main(String[] args) {
+        try {
+            DM11_BFA_Common.initBPO(); // Initialize user, password, proxy variables, and logger
+            DM11_BFA_Common.loginBPO(); // Obtain X-Auth-Token
+
+            String moduleToRun = (args.length > 0) ? args[0].toUpperCase() : null;
+
+            if (moduleToRun == null || moduleToRun.equals("ALL")) {
+                // Run both modules sequentially
+                DM11_BFA_Common.log.info("Running BPO process for Ackyinfo");
+                int ackyinfoStatus = DM11_BFA_InOutUtils.callBPOAPI("ACKYINFO");
+                if (ackyinfoStatus != 0) {
+                    DM11_BFA_Common.log.error("Ackyinfo process failed");
+                    System.exit(ackyinfoStatus);
+                }
+
+                DM11_BFA_Common.log.info("Running BPO process for Debtsale");
+                int debtsaleStatus = DM11_BFA_InOutUtils.callBPOAPI("DEBTSALE");
+                if (debtsaleStatus != 0) {
+                    DM11_BFA_Common.log.error("Debtsale process failed");
+                    System.exit(debtsaleStatus);
+                }
+
+                DM11_BFA_Common.log.info("BPO Process for Ackyinfo and Debtsale is SUCCESSFUL");
+            } else if (moduleToRun.equals("ACKYINFO")) {
+                DM11_BFA_Common.log.info("Running BPO process for Ackyinfo");
+                int status = DM11_BFA_InOutUtils.callBPOAPI("ACKYINFO");
+                if (status == 0) {
+                    DM11_BFA_Common.log.info("BPO Process for Ackyinfo is SUCCESSFUL");
+                } else {
+                    DM11_BFA_Common.log.error("BPO Process for Ackyinfo FAILED.. EXITING");
+                    System.exit(status: -1);
+                }
+            } else if (moduleToRun.equals("DEBTSALE")) {
+                DM11_BFA_Common.log.info("Running BPO process for Debtsale");
+                int status = DM11_BFA_InOutUtils.callBPOAPI("DEBTSALE");
+                if (status == 0) {
+                    DM11_BFA_Common.log.info("BPO Process for Debtsale is SUCCESSFUL");
+                } else {
+                    DM11_BFA_Common.log.error("BPO Process for Debtsale FAILED.. EXITING");
+                    System.exit(status: -1);
+                }
+            } else {
+                DM11_BFA_Common.log.error("Invalid module specified. Use ACKYINFO, DEBTSALE, or ALL");
+                System.exit(status: -1);
+            }
+        } catch (Exception e) {
+            DM11_BFA_Common.log.error(message: "Exception occurred.. Exiting", e);
+            System.exit(status: -1);
+        }
+    }
+}
