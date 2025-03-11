@@ -1,0 +1,115 @@
+static int callBPOAPI(String module) throws Exception {
+    // Fetch all jobs
+    DM11_BFA_Common.log.info("Fetching all the jobs for module: " + module);
+    JSONObject response = DM11_BFA_Common.make_call_bpo(resource: "/jobs", token: true, vt: true, config: "GET");
+
+    // Parse the JSON array to extract job IDs for the specified module
+    JSONArray jobsArray = new JSONArray(response.toString()); // Assuming response is a JSONArray
+    int createBDLJobId = -1;
+    int loadBDLJobId = -1;
+
+    for (int i = 0; i < jobsArray.length(); i++) {
+        JSONObject job = jobsArray.getJSONObject(i);
+        String name = job.getString("name");
+        int id = job.getInt("id");
+
+        if (module.equals("ACKYINFO")) {
+            if (name.equals("ACKYINFO - Create BDL")) {
+                createBDLJobId = id;
+            } else if (name.equals("ACKYINFO UDP - Load BDL")) {
+                loadBDLJobId = id;
+            }
+        } else if (module.equals("DEBTSALE")) {
+            if (name.equals("DEBTSALE - Create BDL")) {
+                createBDLJobId = id;
+            } else if (name.equals("DEBTSALE UDP - Load BDL")) {
+                loadBDLJobId = id;
+            }
+        }
+    }
+
+    // Validate that job IDs are found for the specified module
+    if (createBDLJobId == -1 || loadBDLJobId == -1) {
+        DM11_BFA_Common.log.error(module + " job IDs not found in response");
+        return -1;
+    }
+
+    // Date formatting logic
+    Date curr_date = new Date();
+    SimpleDateFormat dateFormat = new SimpleDateFormat(pattern: "yyyy-MM-dd");
+    Calendar c = Calendar.getInstance();
+    c.setTime(dateFormat.parse(dateFormat.format(curr_date)));
+    c.add(Calendar.DATE, amount: 1);
+    String next_date = dateFormat.format(c.getTime());
+
+    // Process Create BDL Job
+    DM11_BFA_Common.log.info("Starting the Create BDL job for " + module + " with Id: " + createBDLJobId);
+    JSONObject resStartJobCreate = DM11_BFA_Common.make_call_bpo(
+        resource: "/startjob/" + createBDLJobId, token: true, vt: true, config: "POST");
+    DM11_BFA_Common.log.info("Create BDL job completed successfully with Id: " + createBDLJobId);
+    int jobStatusIdCreate = resStartJobCreate.getInt(key: "id");
+
+    // Log and fetch job runs for Create BDL
+    DM11_BFA_Common.log.info("Calling Create BDL job log API for " + module + " with Id: " + createBDLJobId);
+    JSONObject resJobCreate = DM11_BFA_Common.make_call_bpo(
+        resource: "/jobs/" + createBDLJobId + "/runs", token: true, vt: true, config: "POST",
+        "{" +
+        "   \"fromDate\":\"" + dateFormat.format(curr_date) + "\",\"+" +
+        "   \"toDate\":\"" + next_date + "\"" +
+        "}"
+    );
+    int createBDLLogId = resJobCreate.getInt(key: "id");
+    String createBDLStatus = null;
+    String[] fail_status = {"PARTIALLYPROCESSED", "FAILED"};
+    List<String> fail = Arrays.asList(fail_status);
+    String[] pass_status = {"SUCCESS"};
+    List<String> pass = Arrays.asList(pass_status);
+    JSONObject createBDLJobStatusObj = null;
+
+    do {
+        TimeUnit.SECONDS.sleep(timeout: 5);
+        createBDLJobStatusObj = DM11_BFA_Common.make_call_bpo(
+            resource: "/jobstatus/" + createBDLLogId, token: true, vt: true, config: "GET");
+        createBDLStatus = createBDLJobStatusObj.getString(key: "status");
+        DM11_BFA_Common.log.info("Status: " + StringEscapeUtils.escapeJava(createBDLStatus));
+    } while (fail.contains(createBDLStatus) && pass.contains(createBDLStatus));
+
+    if (fail.contains(createBDLStatus)) {
+        DM11_BFA_Common.log.error("Response Body: " + StringEscapeUtils.escapeJson(createBDLJobStatusObj.toString()));
+        DM11_BFA_Common.log.error("API CALL failed with status: " + StringEscapeUtils.escapeJava(createBDLStatus) + ". Exiting");
+        System.exit(status: -1);
+    } else {
+        DM11_BFA_Common.log.info("Create BDL API call succeeded with status: " + StringEscapeUtils.escapeJava(createBDLStatus));
+    }
+
+    // Process Load BDL Job
+    DM11_BFA_Common.log.info("Calling Load BDL job for " + module + " with Id: " + loadBDLJobId);
+    JSONObject resJobLoad = DM11_BFA_Common.make_call_bpo(
+        resource: "/jobs/" + loadBDLJobId + "/runs", token: true, vt: true, config: "POST",
+        "{" +
+        "   \"fromDate\":\"" + dateFormat.format(curr_date) + "\",\"+" +
+        "   \"toDate\":\"" + next_date + "\"" +
+        "}"
+    );
+    int loadBDLLogId = resJobLoad.getInt(key: "id");
+    String loadBDLStatus = null;
+    JSONObject loadBDLJobStatusObj = null;
+
+    do {
+        TimeUnit.SECONDS.sleep(timeout: 5);
+        loadBDLJobStatusObj = DM11_BFA_Common.make_call_bpo(
+            resource: "/jobstatus/" + loadBDLLogId, token: true, vt: true, config: "GET");
+        loadBDLStatus = loadBDLJobStatusObj.getString(key: "status");
+        DM11_BFA_Common.log.info("Status: " + StringEscapeUtils.escapeJava(loadBDLStatus));
+    } while (fail.contains(loadBDLStatus) && pass.contains(loadBDLStatus));
+
+    if (fail.contains(loadBDLStatus)) {
+        DM11_BFA_Common.log.error("Response Body: " + StringEscapeUtils.escapeJson(loadBDLJobStatusObj.toString()));
+        DM11_BFA_Common.log.error("API CALL failed with status: " + StringEscapeUtils.escapeJava(loadBDLStatus) + ". Exiting");
+        System.exit(status: -1);
+    } else {
+        DM11_BFA_Common.log.info("Load BDL API call succeeded with status: " + StringEscapeUtils.escapeJava(loadBDLStatus));
+    }
+
+    return 0;
+}
