@@ -2,13 +2,17 @@ import javax.mail.*;
 import javax.mail.internet.*;
 import java.io.File;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.Properties;
 
 public class DCAEmailSender {
     // Email configuration - set according to your environment
     private static final String SMTP_HOST = "localhost";  // Using localhost as per the image
+    private static final String[] TO_EMAILS = {
+        "a@gmail.com",
+        "b@gmail.com",
+        "c@gmail.com"
+    };
 
     private static void sendMail(String[] toEmails, String attachment, String subject, String body) {
         try {
@@ -57,12 +61,11 @@ public class DCAEmailSender {
     }
 
     public static void main(String[] args) {
-        // Environment variables
+        // Environment variable for directory
         String dmInDir = System.getenv("DM_IN_DIR");
-        String mailToDCA = System.getenv("Mail_to_DCA");
 
-        if (dmInDir == null || mailToDCA == null) {
-            System.out.println("Environment variables DM_IN_DIR and Mail_to_DCA must be set");
+        if (dmInDir == null) {
+            System.out.println("Environment variable DM_IN_DIR must be set");
             return;
         }
 
@@ -70,12 +73,6 @@ public class DCAEmailSender {
         if (!directory.exists() || !directory.isDirectory()) {
             System.out.println("Invalid directory: " + dmInDir);
             return;
-        }
-
-        // Parse the Mail_to_DCA environment variable into an array of email addresses
-        String[] toEmails = mailToDCA.split(",");
-        for (int i = 0; i < toEmails.length; i++) {
-            toEmails[i] = toEmails[i].trim(); // Remove any leading/trailing whitespace
         }
 
         // Process only .csv files starting with DCA_exception
@@ -97,7 +94,7 @@ public class DCAEmailSender {
                                   "************ THIS IS AN AUTOMATED MAIL. PLEASE DO NOT REPLY ************";
 
                 try {
-                    sendMail(toEmails, attachmentPath, "Account is in DCA exception queue", emailBody);
+                    sendMail(TO_EMAILS, attachmentPath, "Account is in DCA exception queue", emailBody);
                 } catch (Exception e) {
                     System.err.println("Error processing file " + fileName + ": " + e.getMessage());
                     e.printStackTrace();
