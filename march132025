@@ -1,0 +1,109 @@
+import javax.mail.*;
+import javax.mail.internet.*;
+import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Properties;
+
+public class DCAEmailSender {
+    // Email configuration - these should be set according to your environment
+    private static final String SMTP_HOST = "localhost";  // Using localhost as per the second image
+    private static final String SMTP_PORT = "587";       // Common port for SMTP with TLS
+    private static final String FROM_EMAIL = "your-email@domain.com"; // Replace with sender email
+    private static final String EMAIL_PASSWORD = "your-password";    // Replace with sender password
+
+    private static void sendMail(String pTo, String pFile, String pDate) {
+        try {
+            // Set up mail server properties as shown in the second image
+            Properties properties = new Properties();
+            properties.setProperty("mail.smtp.host", SMTP_HOST);
+
+            // Adding authentication and TLS properties (required for most SMTP servers)
+            properties.setProperty("mail.smtp.auth", "true");
+            properties.setProperty("mail.smtp.starttls.enable", "true");
+            properties.setProperty("mail.smtp.port", SMTP_PORT);
+
+            // Create a session with authentication
+            Session session = Session.getInstance(properties, new Authenticator() {
+                @Override
+                protected PasswordAuthentication getPasswordAuthentication() {
+                    return new PasswordAuthentication(FROM_EMAIL, EMAIL_PASSWORD);
+                }
+            });
+
+            // Create email message
+            MimeMessage message = new MimeMessage(session);
+            message.addRecipients(Message.RecipientType.TO, InternetAddress.parse(pTo));
+            message.setSubject("Account is in DCA exception queue");
+
+            // Create the message body
+            MimeBodyPart messageBodyPart = new MimeBodyPart();
+            String emailBody = "Hi All,\n\n" +
+                              "SDM_DCA_Exception_Extract_" + pFile + " sent successfully on " + pDate + "\n\n" +
+                              "************ THIS IS AN AUTOMATED MAIL. PLEASE DO NOT REPLY ************";
+            messageBodyPart.setContent(emailBody, "text/plain; charset=utf-8");
+
+            // Create the attachment part
+            MimeBodyPart attachmentPart = new MimeBodyPart();
+            String filePath = System.getenv("DM_IN_DIR") + "/SDM_DCA_Exception_Extract_" + pFile;
+            attachmentPart.attachFile(new File(filePath));
+
+            // Combine body and attachment
+            Multipart multipart = new MimeMultipart();
+            multipart.addBodyPart(messageBodyPart);
+            multipart.addBodyPart(attachmentPart);
+
+            // Set the content and send
+            message.setContent(multipart);
+            Transport.send(message);
+
+            System.out.println("DCA Email sent successfully for file: SDM_DCA_Exception_Extract_" + pFile);
+
+        } catch (Exception e) {
+            System.err.println("Error in mailing DCA report: " + e.getMessage());
+            e.printStackTrace();
+            System.exit(1);
+        }
+    }
+
+    public static void main(String[] args) {
+        // Environment variables
+        String dmInDir = System.getenv("DM_IN_DIR");
+        String mailToDCA = System.getenv("Mail_to_DCA");
+
+        if (dmInDir == null || mailToDCA == null) {
+            System.out.println("Environment variables DM_IN_DIR and Mail_to_DCA must be set");
+            return;
+        }
+
+        File directory = new File(dmInDir);
+        if (!directory.exists() || !directory.isDirectory()) {
+            System.out.println("Invalid directory: " + dmInDir);
+            return;
+        }
+
+        // Process each matching file
+        File[] files = directory.listFiles((dir, name) -> 
+            name.startsWith("DCA_exception") && name.endsWith(".csv"));
+
+        if (files != null && files.length > 0) {
+            SimpleDateFormat dateFormat = new SimpleDateFormat("EEE d MMM HH:mm:ss 'GMT' yyyy");
+            String formattedDate = dateFormat.format(new Date());
+
+            for (File file : files) {
+                // Extract the date part from the filename (assuming format matches SDM_DCA_Exception_Extract_YYYYMMDD_YYYYMMDDHHMISS.csv)
+                String fileName = file.getName();
+                String datePart = fileName.replace("SDM_DCA_Exception_Extract_", "").replace(".csv", "");
+
+                try {
+                    sendMail(mailToDCA, datePart, formattedDate);
+                } catch (Exception e) {
+                    System.err.println("Error processing file " + fileName + ": " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        } else {
+            System.out.println("No DCA_exception*.csv files found in " + dmInDir);
+        }
+    }
+}
