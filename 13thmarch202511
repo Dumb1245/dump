@@ -2,96 +2,109 @@ import javax.mail.*;
 import javax.mail.internet.*;
 import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Properties;
 
 public class DCAEmailSender {
- // Email configuration - set according to your environment
- private static final String SMTP_HOST = "localhost"; // Using localhost as per the image
+    // Email configuration - set according to your environment
+    private static final String SMTP_HOST = "localhost";  // Using localhost as per the image
 
- private static void sendMail(String toEmail, String attachment, String subject, String body) {
- try {
- // Set up mail server properties
- Properties properties = System.getProperties();
- properties.setProperty("mail.smtp.host", SMTP_HOST);
+    private static void sendMail(String[] toEmails, String attachment, String subject, String body) {
+        try {
+            // Set up mail server properties
+            Properties properties = System.getProperties();
+            properties.setProperty("mail.smtp.host", SMTP_HOST);
 
- // Create a session without authentication
- Session session = Session.getDefaultInstance(properties);
+            // Create a session without authentication
+            Session session = Session.getDefaultInstance(properties);
 
- // Create email message
- MimeMessage message = new MimeMessage(session);
- message.addRecipients(Message.RecipientType.TO, InternetAddress.parse(toEmail));
- message.setSubject(subject, "utf-8");
+            // Create email message
+            MimeMessage message = new MimeMessage(session);
 
- // Create the message body
- MimeBodyPart messageBodyPart = new MimeBodyPart();
- messageBodyPart.setText(body);
+            // Add all recipients
+            for (String toEmail : toEmails) {
+                if (toEmail != null && !toEmail.trim().isEmpty()) {
+                    message.addRecipients(Message.RecipientType.TO, InternetAddress.parse(toEmail.trim()));
+                }
+            }
+            message.setSubject(subject, "utf-8");
 
- // Create the attachment part
- MimeBodyPart attachmentPart = new MimeBodyPart();
- attachmentPart.attachFile(new File(attachment));
+            // Create the message body
+            MimeBodyPart messageBodyPart = new MimeBodyPart();
+            messageBodyPart.setText(body);
 
- // Combine body and attachment
- Multipart multipart = new MimeMultipart();
- multipart.addBodyPart(messageBodyPart);
- multipart.addBodyPart(attachmentPart);
+            // Create the attachment part
+            MimeBodyPart attachmentPart = new MimeBodyPart();
+            attachmentPart.attachFile(new File(attachment));
 
- // Set the content and send
- message.setContent(multipart);
- Transport.send(message);
+            // Combine body and attachment
+            Multipart multipart = new MimeMultipart();
+            multipart.addBodyPart(messageBodyPart);
+            multipart.addBodyPart(attachmentPart);
 
- System.out.println("DCA Email sent successfully for file: " + new File(attachment).getName());
+            // Set the content and send
+            message.setContent(multipart);
+            Transport.send(message);
 
- } catch (Exception e) {
- System.err.println("Error in mailing DCA report: " + e.getMessage());
- e.printStackTrace();
- System.exit(1);
- }
- }
+            System.out.println("DCA Email sent successfully for file: " + new File(attachment).getName());
 
- public static void main(String[] args) {
- // Environment variables
- String dmInDir = System.getenv("DM_IN_DIR");
- String mailToDCA = System.getenv("Mail_to_DCA");
+        } catch (Exception e) {
+            System.err.println("Error in mailing DCA report: " + e.getMessage());
+            e.printStackTrace();
+            System.exit(1);
+        }
+    }
 
- if (dmInDir == null || mailToDCA == null) {
- System.out.println("Environment variables DM_IN_DIR and Mail_to_DCA must be set");
- return;
- }
+    public static void main(String[] args) {
+        // Environment variables
+        String dmInDir = System.getenv("DM_IN_DIR");
+        String mailToDCA = System.getenv("Mail_to_DCA");
 
- File directory = new File(dmInDir);
- if (!directory.exists() || !directory.isDirectory()) {
- System.out.println("Invalid directory: " + dmInDir);
- return;
- }
+        if (dmInDir == null || mailToDCA == null) {
+            System.out.println("Environment variables DM_IN_DIR and Mail_to_DCA must be set");
+            return;
+        }
 
- // Process only .csv files starting with DCA_exception
- File[] files = directory.listFiles((dir, name) -> 
- name.matches("DCA_exception.*\\.csv"));
+        File directory = new File(dmInDir);
+        if (!directory.exists() || !directory.isDirectory()) {
+            System.out.println("Invalid directory: " + dmInDir);
+            return;
+        }
 
- if (files != null && files.length > 0) {
- SimpleDateFormat dateFormat = new SimpleDateFormat("EEE d MMM HH:mm:ss 'GMT' yyyy");
- String formattedDate = dateFormat.format(new Date());
+        // Parse the Mail_to_DCA environment variable into an array of email addresses
+        String[] toEmails = mailToDCA.split(",");
+        for (int i = 0; i < toEmails.length; i++) {
+            toEmails[i] = toEmails[i].trim(); // Remove any leading/trailing whitespace
+        }
 
- for (File file : files) {
- // Use the original filename as the attachment
- String fileName = file.getName();
- String attachmentPath = file.getAbsolutePath();
+        // Process only .csv files starting with DCA_exception
+        File[] files = directory.listFiles((dir, name) -> 
+            name.matches("DCA_exception.*\\.csv"));
 
- // Construct the email body
- String emailBody = "Hi All,\n\n" +
- fileName + " sent successfully on " + formattedDate + "\n\n" +
- "************ THIS IS AN AUTOMATED MAIL. PLEASE DO NOT REPLY ************";
+        if (files != null && files.length > 0) {
+            SimpleDateFormat dateFormat = new SimpleDateFormat("EEE d MMM HH:mm:ss 'GMT' yyyy");
+            String formattedDate = dateFormat.format(new Date());
 
- try {
- sendMail(mailToDCA, attachmentPath, "Account is in DCA exception queue", emailBody);
- } catch (Exception e) {
- System.err.println("Error processing file " + fileName + ": " + e.getMessage());
- e.printStackTrace();
- }
- }
- } else {
- System.out.println("No DCA_exception*.csv files found in " + dmInDir);
- }
- }
+            for (File file : files) {
+                // Use the original filename as the attachment
+                String fileName = file.getName();
+                String attachmentPath = file.getAbsolutePath();
+
+                // Construct the email body
+                String emailBody = "Hi All,\n\n" +
+                                  fileName + " sent successfully on " + formattedDate + "\n\n" +
+                                  "************ THIS IS AN AUTOMATED MAIL. PLEASE DO NOT REPLY ************";
+
+                try {
+                    sendMail(toEmails, attachmentPath, "Account is in DCA exception queue", emailBody);
+                } catch (Exception e) {
+                    System.err.println("Error processing file " + fileName + ": " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        } else {
+            System.out.println("No DCA_exception*.csv files found in " + dmInDir);
+        }
+    }
 }
