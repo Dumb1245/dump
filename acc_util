@@ -1,80 +1,120 @@
-import java.io.*;
-import java.nio.file.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-public class FileRenameUtility {
+public class FileRenamerUtility {
     public static void main(String[] args) {
-        // Define the directory path
-        String directoryPath = "DM_IN_DIR";
-        
         try {
-            // Read business date from business_date.txt
-            Path businessDatePath = Paths.get(directoryPath, "business_date.txt");
-            String businessDate = Files.readString(businessDatePath).trim();
+            // Read the business date from business_date.txt
+            String businessDate = readBusinessDate();
             
-            // Get directory
-            File directory = new File(directoryPath);
-            
-            // Check if directory exists
-            if (!directory.exists() || !directory.isDirectory()) {
-                System.err.println("Directory " + directoryPath + " does not exist");
-                return;
+            // Directory path
+            String inputDirectory = System.getenv("DM_IN_DIR");
+            if (inputDirectory == null) {
+                throw new IllegalStateException("DM_IN_DIR environment variable is not set");
             }
             
-            // Define valid prefixes
-            String[] validPrefixes = {
-                "ackyinfo_",
-                "ackyinfo_monthly_",
-                "cnsmr_accnt_",
-                "cnsmr_accnt_monthly_"
-            };
+            // Rename matching files
+            renameMatchingFiles(inputDirectory, businessDate);
             
-            // Process files in directory
-            File[] files = directory.listFiles((dir, name) -> {
-                // Check if file ends with .txt and has 14 digits timestamp
-                if (!name.endsWith(".txt") || name.length() < 19) {
-                    return false;
-                }
-                
-                // Check for valid prefix
-                for (String prefix : validPrefixes) {
-                    if (name.startsWith(prefix)) {
-                        // Check if the rest is a 14-digit timestamp
-                        String timestampPart = name.substring(prefix.length(), name.length() - 4);
-                        return timestampPart.matches("\\d{14}");
-                    }
-                }
-                return false;
-            });
-            
-            if (files != null) {
-                for (File file : files) {
-                    String oldFileName = file.getName();
-                    
-                    // Extract prefix and timestamp
-                    String prefix = oldFileName.substring(0, oldFileName.lastIndexOf("_"));
-                    String timestamp = oldFileName.substring(oldFileName.lastIndexOf("_") + 1, 
-                                                           oldFileName.lastIndexOf("."));
-                    
-                    // Construct new file name
-                    String newFileName = String.format("%s_%s_%s.txt", 
-                        prefix, businessDate, timestamp);
-                    
-                    // Create Path objects for old and new files
-                    Path oldFilePath = Paths.get(directoryPath, oldFileName);
-                    Path newFilePath = Paths.get(directoryPath, newFileName);
-                    
-                    // Rename the file
-                    Files.move(oldFilePath, newFilePath);
-                    
-                    System.out.println("Renamed: " + oldFileName + " -> " + newFileName);
-                }
-            } else {
-                System.out.println("No matching files found in directory");
-            }
-            
-        } catch (IOException e) {
-            System.err.println("Error processing files: " + e.getMessage());
+            System.out.println("File renaming completed successfully.");
+        } catch (Exception e) {
+            System.err.println("Error occurred during file renaming: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Reads the business date from business_date.txt in the input directory
+     * @return Business date as a string
+     * @throws IOException If there's an error reading the file
+     */
+    private static String readBusinessDate() throws IOException {
+        String inputDirectory = System.getenv("DM_IN_DIR");
+        if (inputDirectory == null) {
+            throw new IllegalStateException("DM_IN_DIR environment variable is not set");
+        }
+        
+        Path businessDateFile = Paths.get(inputDirectory, "business_date.txt");
+        
+        try (BufferedReader reader = new BufferedReader(new FileReader(businessDateFile.toFile()))) {
+            String businessDate = reader.readLine().trim();
+            
+            // Validate business date format (assuming YYYYMMDD)
+            if (!businessDate.matches("\\d{8}")) {
+                throw new IllegalArgumentException("Invalid business date format: " + businessDate);
+            }
+            
+            return businessDate;
+        }
+    }
+    
+    /**
+     * Renames files matching the specified patterns
+     * @param directory Directory to search for files
+     * @param businessDate Business date to insert in the filename
+     * @throws IOException If there's an error renaming the file
+     */
+    private static void renameMatchingFiles(String directory, String businessDate) throws IOException {
+        // Patterns to match
+        List<String> filePatterns = new ArrayList<>() {{
+            add("ackyinfo");
+            add("cnsmr_accnt");
+        }};
+        
+        // Regular expression to match timestamp
+        Pattern timestampPattern = Pattern.compile("(\\d{14})\\.txt$");
+        
+        // Find and rename files
+        File dir = new File(directory);
+        File[] files = dir.listFiles();
+        
+        if (files == null) {
+            System.out.println("No files found in directory: " + directory);
+            return;
+        }
+        
+        for (File file : files) {
+            String filename = file.getName();
+            
+            // Check if file matches any of the patterns
+            boolean matchesPattern = filePatterns.stream()
+                .anyMatch(pattern -> 
+                    filename.startsWith(pattern) && 
+                    (filename.contains("_monthly_") || !filename.contains("_")) && 
+                    filename.endsWith(".txt")
+                );
+            
+            if (matchesPattern) {
+                // Extract timestamp
+                Matcher matcher = timestampPattern.matcher(filename);
+                if (matcher.find()) {
+                    String timestamp = matcher.group(1);
+                    
+                    // Construct new filename
+                    String newFilename;
+                    if (filename.contains("_monthly_")) {
+                        newFilename = filename.replace("_" + timestamp, "_" + businessDate + "_" + timestamp);
+                    } else {
+                        newFilename = filename.replace(timestamp, businessDate + "_" + timestamp);
+                    }
+                    
+                    // Rename file
+                    Path newPath = Paths.get(directory, newFilename);
+                    Files.move(file.toPath(), newPath, StandardCopyOption.REPLACE_EXISTING);
+                    
+                    System.out.println("Renamed: " + filename + " -> " + newFilename);
+                }
+            }
         }
     }
 }
