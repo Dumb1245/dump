@@ -15,17 +15,19 @@ import java.util.regex.Pattern;
 public class FileRenamerUtility {
     public static void main(String[] args) {
         try {
-            // Read the business date from business_date.txt
-            String businessDate = readBusinessDate();
-            
-            // Directory path
+            // Null check for environment variable
             String inputDirectory = System.getenv("DM_IN_DIR");
-            if (inputDirectory == null) {
+            if (inputDirectory == null || inputDirectory.trim().isEmpty()) {
+                DM11_BFA_Common.log.info("Error: DM_IN_DIR environment variable is not set");
                 throw new IllegalStateException("DM_IN_DIR environment variable is not set");
             }
+
+            // Read the business date from business_date.txt
+            String businessDate = readBusinessDate(inputDirectory);
             
             // Log start of renaming process
-            DM11_BFA_Common.log.info("Starting file renaming process. Business Date: " + businessDate);
+            DM11_BFA_Common.log.info("Starting file renaming process. Business Date: " + businessDate + 
+                                     ", Input Directory: " + inputDirectory);
             
             // Rename matching files
             renameMatchingFiles(inputDirectory, businessDate);
@@ -33,32 +35,47 @@ public class FileRenamerUtility {
             // Log successful completion
             DM11_BFA_Common.log.info("File renaming completed successfully.");
         } catch (Exception e) {
-            // Log error details
+            // Log error details with full stack trace
             DM11_BFA_Common.log.info("Error occurred during file renaming: " + e.getMessage());
+            
+            // Print full stack trace to help with debugging
             e.printStackTrace();
         }
     }
     
     /**
      * Reads the business date from business_date.txt in the input directory
+     * @param inputDirectory Directory containing the business_date.txt
      * @return Business date as a string
      * @throws IOException If there's an error reading the file
      */
-    private static String readBusinessDate() throws IOException {
-        String inputDirectory = System.getenv("DM_IN_DIR");
-        if (inputDirectory == null) {
-            throw new IllegalStateException("DM_IN_DIR environment variable is not set");
-        }
-        
+    private static String readBusinessDate(String inputDirectory) throws IOException {
+        // Construct business date file path
         Path businessDateFile = Paths.get(inputDirectory, "business_date.txt");
+        
+        // Validate file exists
+        if (!Files.exists(businessDateFile)) {
+            DM11_BFA_Common.log.info("Error: Business date file not found at " + businessDateFile);
+            throw new IOException("Business date file not found: " + businessDateFile);
+        }
         
         DM11_BFA_Common.log.info("Reading business date from: " + businessDateFile);
         
         try (BufferedReader reader = new BufferedReader(new FileReader(businessDateFile.toFile()))) {
-            String businessDate = reader.readLine().trim();
+            // Read first line and trim
+            String businessDate = reader.readLine();
+            
+            // Additional null and empty checks
+            if (businessDate == null || businessDate.trim().isEmpty()) {
+                DM11_BFA_Common.log.info("Error: Business date file is empty");
+                throw new IllegalArgumentException("Business date file is empty");
+            }
+            
+            businessDate = businessDate.trim();
             
             // Validate business date format (assuming YYYYMMDD)
             if (!businessDate.matches("\\d{8}")) {
+                DM11_BFA_Common.log.info("Error: Invalid business date format: " + businessDate);
                 throw new IllegalArgumentException("Invalid business date format: " + businessDate);
             }
             
@@ -74,6 +91,17 @@ public class FileRenamerUtility {
      * @throws IOException If there's an error renaming the file
      */
     private static void renameMatchingFiles(String directory, String businessDate) throws IOException {
+        // Validate input parameters
+        if (directory == null || directory.trim().isEmpty()) {
+            DM11_BFA_Common.log.info("Error: Directory cannot be null or empty");
+            throw new IllegalArgumentException("Directory cannot be null or empty");
+        }
+        
+        if (businessDate == null || businessDate.trim().isEmpty()) {
+            DM11_BFA_Common.log.info("Error: Business date cannot be null or empty");
+            throw new IllegalArgumentException("Business date cannot be null or empty");
+        }
+        
         // Patterns to match
         final List<String> filePatterns = new ArrayList<>(Arrays.asList("ackyinfo", "cnsmr_accnt"));
         
@@ -82,9 +110,16 @@ public class FileRenamerUtility {
         
         // Find and rename files
         File dir = new File(directory);
+        
+        // Additional directory existence check
+        if (!dir.exists() || !dir.isDirectory()) {
+            DM11_BFA_Common.log.info("Error: Invalid directory path: " + directory);
+            throw new IOException("Invalid directory path: " + directory);
+        }
+        
         File[] files = dir.listFiles();
         
-        if (files == null) {
+        if (files == null || files.length == 0) {
             DM11_BFA_Common.log.info("No files found in directory: " + directory);
             return;
         }
@@ -92,7 +127,18 @@ public class FileRenamerUtility {
         int renamedFileCount = 0;
         
         for (final File file : files) {
+            // Skip if file is null or not a file
+            if (file == null || !file.isFile()) {
+                continue;
+            }
+            
             String filename = file.getName();
+            
+            // Null and empty check for filename
+            if (filename == null || filename.trim().isEmpty()) {
+                DM11_BFA_Common.log.info("Skipping file with invalid name");
+                continue;
+            }
             
             // Check if file matches any of the patterns
             boolean matchesPattern = false;
@@ -121,11 +167,17 @@ public class FileRenamerUtility {
                     
                     // Rename file
                     Path newPath = Paths.get(directory, newFilename);
-                    Files.move(file.toPath(), newPath, StandardCopyOption.REPLACE_EXISTING);
                     
-                    // Log each file rename
-                    DM11_BFA_Common.log.info("Renamed: " + filename + " -> " + newFilename);
-                    renamedFileCount++;
+                    try {
+                        Files.move(file.toPath(), newPath, StandardCopyOption.REPLACE_EXISTING);
+                        
+                        // Log each file rename
+                        DM11_BFA_Common.log.info("Renamed: " + filename + " -> " + newFilename);
+                        renamedFileCount++;
+                    } catch (IOException e) {
+                        // Log specific rename failures
+                        DM11_BFA_Common.log.info("Failed to rename file " + filename + ": " + e.getMessage());
+                    }
                 }
             }
         }
