@@ -1,0 +1,64 @@
+import java.io.*;
+import java.nio.file.*;
+import java.util.regex.*;
+
+public class FileRenameUtility {
+    public static void main(String[] args) {
+        // Define the directory path
+        String directoryPath = "DM_IN_DIR";
+        
+        // Pattern to match files: (ackyinfo|cnsmr_accnt)(_monthly)?_\d{14}\.txt
+        String filePattern = "(ackyinfo|cnsmr_accnt)(_monthly)?_\\d{14}\\.txt";
+        
+        try {
+            // Read business date from business_date.txt
+            Path businessDatePath = Paths.get(directoryPath, "business_date.txt");
+            String businessDate = Files.readString(businessDatePath).trim();
+            
+            // Get directory
+            File directory = new File(directoryPath);
+            
+            // Check if directory exists
+            if (!directory.exists() || !directory.isDirectory()) {
+                System.err.println("Directory " + directoryPath + " does not exist");
+                return;
+            }
+            
+            // Compile the pattern
+            Pattern pattern = Pattern.compile(filePattern);
+            
+            // Process each matching file in the directory
+            File[] files = directory.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    String oldFileName = file.getName();
+                    
+                    if (pattern.matcher(oldFileName).matches()) {
+                        // Extract prefix (ackyinfo, ackyinfo_monthly, cnsmr_accnt, or cnsmr_accnt_monthly)
+                        String prefix = oldFileName.substring(0, oldFileName.lastIndexOf("_"));
+                        // Extract timestamp (yyyymmddhhmmss)
+                        String timestamp = oldFileName.substring(oldFileName.lastIndexOf("_") + 1, 
+                                                              oldFileName.lastIndexOf("."));
+                        
+                        // Construct new file name
+                        String newFileName = String.format("%s_%s_%s.txt", 
+                            prefix, businessDate, timestamp);
+                        
+                        // Create Path objects for old and new files
+                        Path oldFilePath = Paths.get(directoryPath, oldFileName);
+                        Path newFilePath = Paths.get(directoryPath, newFileName);
+                        
+                        // Rename the file
+                        Files.move(oldFilePath, newFilePath);
+                        
+                        System.out.println("Renamed: " + oldFileName + " -> " + newFileName);
+                    }
+                }
+            }
+            
+        } catch (IOException e) {
+            System.err.println("Error processing files: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
