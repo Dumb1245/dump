@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -23,12 +24,17 @@ public class FileRenamerUtility {
                 throw new IllegalStateException("DM_IN_DIR environment variable is not set");
             }
             
+            // Log start of renaming process
+            DM11_BFA_Common.log.info("Starting file renaming process. Business Date: " + businessDate);
+            
             // Rename matching files
             renameMatchingFiles(inputDirectory, businessDate);
             
-            System.out.println("File renaming completed successfully.");
+            // Log successful completion
+            DM11_BFA_Common.log.info("File renaming completed successfully.");
         } catch (Exception e) {
-            System.err.println("Error occurred during file renaming: " + e.getMessage());
+            // Log error details
+            DM11_BFA_Common.log.info("Error occurred during file renaming: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -46,6 +52,8 @@ public class FileRenamerUtility {
         
         Path businessDateFile = Paths.get(inputDirectory, "business_date.txt");
         
+        DM11_BFA_Common.log.info("Reading business date from: " + businessDateFile);
+        
         try (BufferedReader reader = new BufferedReader(new FileReader(businessDateFile.toFile()))) {
             String businessDate = reader.readLine().trim();
             
@@ -54,6 +62,7 @@ public class FileRenamerUtility {
                 throw new IllegalArgumentException("Invalid business date format: " + businessDate);
             }
             
+            DM11_BFA_Common.log.info("Business date read: " + businessDate);
             return businessDate;
         }
     }
@@ -66,33 +75,35 @@ public class FileRenamerUtility {
      */
     private static void renameMatchingFiles(String directory, String businessDate) throws IOException {
         // Patterns to match
-        List<String> filePatterns = new ArrayList<>() {{
-            add("ackyinfo");
-            add("cnsmr_accnt");
-        }};
+        final List<String> filePatterns = new ArrayList<>(Arrays.asList("ackyinfo", "cnsmr_accnt"));
         
         // Regular expression to match timestamp
-        Pattern timestampPattern = Pattern.compile("(\\d{14})\\.txt$");
+        final Pattern timestampPattern = Pattern.compile("(\\d{14})\\.txt$");
         
         // Find and rename files
         File dir = new File(directory);
         File[] files = dir.listFiles();
         
         if (files == null) {
-            System.out.println("No files found in directory: " + directory);
+            DM11_BFA_Common.log.info("No files found in directory: " + directory);
             return;
         }
         
-        for (File file : files) {
+        int renamedFileCount = 0;
+        
+        for (final File file : files) {
             String filename = file.getName();
             
             // Check if file matches any of the patterns
-            boolean matchesPattern = filePatterns.stream()
-                .anyMatch(pattern -> 
-                    filename.startsWith(pattern) && 
+            boolean matchesPattern = false;
+            for (String pattern : filePatterns) {
+                if (filename.startsWith(pattern) && 
                     (filename.contains("_monthly_") || !filename.contains("_")) && 
-                    filename.endsWith(".txt")
-                );
+                    filename.endsWith(".txt")) {
+                    matchesPattern = true;
+                    break;
+                }
+            }
             
             if (matchesPattern) {
                 // Extract timestamp
@@ -112,9 +123,14 @@ public class FileRenamerUtility {
                     Path newPath = Paths.get(directory, newFilename);
                     Files.move(file.toPath(), newPath, StandardCopyOption.REPLACE_EXISTING);
                     
-                    System.out.println("Renamed: " + filename + " -> " + newFilename);
+                    // Log each file rename
+                    DM11_BFA_Common.log.info("Renamed: " + filename + " -> " + newFilename);
+                    renamedFileCount++;
                 }
             }
         }
+        
+        // Log total number of renamed files
+        DM11_BFA_Common.log.info("Total files renamed: " + renamedFileCount);
     }
 }
