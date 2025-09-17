@@ -1,0 +1,64 @@
+private static void module_post_api_ob_custom_fields() throws Exception {
+    log.info("Starting to post OB_CUSTOM_FIELDS configuration data to target environment");
+
+    String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+
+    for (ConfigData configData : configDataList) {
+        try {
+            String uniqueId = configData.uniqueId != null ? configData.uniqueId : "AUTO_" + timestamp;
+            String comments = configData.comments != null ? configData.comments : 
+                    "Migrated from " + sourceEnv.toUpperCase() + " to " + targetEnv.toUpperCase() + " on " + timestamp;
+
+            // Sanitize and escape the fields
+            String sanitizedUniqueId = sanitizeAndEscape(uniqueId);
+            String sanitizedComments = sanitizeAndEscape(comments);
+            String sanitizedModuleName = sanitizeAndEscape(configData.moduleName);
+            String sanitizedActiveFlag = sanitizeAndEscape(configData.activeFlag);
+            String sanitizedPosition = sanitizeAndEscape(String.valueOf(configData.position));
+            String sanitizedColumnSql = sanitizeSql(configData.columnSql);
+
+            // Construct JSON body with sanitized values
+            makeCall("/referenceuserdefinedpages/" + tableName + "/data", true, true, "POST",
+                    "{\"tableName\": \"" + tableName + "\","
+                    + "\"userDefinedData\": {"
+                    + "\"fieldName\": \"REFUDEFUNIQUE_ID\","
+                    + "\"fieldValue\": \"" + sanitizedUniqueId + "\","
+                    + "\"fieldName\": \"REFUDEFMODULE_NAME\","
+                    + "\"fieldValue\": \"" + (sanitizedModuleName != null ? sanitizedModuleName : "null") + "\","
+                    + "\"fieldName\": \"REFUDEFACTIVE_FLAG\","
+                    + "\"fieldValue\": \"" + (sanitizedActiveFlag != null ? sanitizedActiveFlag : "null") + "\","
+                    + "\"fieldName\": \"REFUDEFPOSITION\","
+                    + "\"fieldValue\": \"" + (sanitizedPosition != null ? sanitizedPosition : "null") + "\","
+                    + "\"fieldName\": \"REFUDEFCOLUMN_SQL\","
+                    + "\"fieldValue\": \"" + (sanitizedColumnSql != null ? sanitizedColumnSql : "null") + "\","
+                    + "\"fieldName\": \"REFUDEFCOMMENTS\","
+                    + "\"fieldValue\": \"" + (sanitizedComments != null ? sanitizedComments : "null")
+                    + "}}");
+
+            log.info("Successfully posted OB_CUSTOM_FIELDS configuration - Unique ID: " + sanitizedUniqueId
+                    + ", Position: " + (sanitizedPosition != null ? sanitizedPosition : "")
+                    + ", Active Flag: " + (sanitizedActiveFlag != null ? sanitizedActiveFlag : ""));
+        } catch (Exception e) {
+            log.error("Failed to post OB_CUSTOM_FIELDS configuration for Unique ID: " + configData.uniqueId, e);
+        }
+    }
+    log.info("Completed posting " + configDataList.size() + " OB_CUSTOM_FIELDS records to target environment: " + targetEnv);
+}
+
+// Helper method to sanitize and escape strings for JSON and XSS
+private static String sanitizeAndEscape(String input) {
+    if (input == null) return null;
+    // Escape JSON special characters
+    return input.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+}
+
+// Helper method to sanitize SQL text without replacing content
+private static String sanitizeSql(String input) {
+    if (input == null) return null;
+    // Escape JSON special characters while preserving SQL content
+    return sanitizeAndEscape(input);
+}
